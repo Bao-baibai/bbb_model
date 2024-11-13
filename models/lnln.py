@@ -9,10 +9,6 @@ class MyMultimodal(nn.Module):
     def __init__(self, args):
         super(MyMultimodal, self).__init__()
 
-        # 参数初始化
-        self.h_hyper = nn.Parameter(torch.ones(1, args['model']['feature_extractor']['token_length'][0], 128))
-        self.h_p = nn.Parameter(torch.ones(1, args['model']['feature_extractor']['token_length'][0], 128))
-
         self.bertmodel = BertTextEncoder(use_finetune=True, transformers='bert', pretrained=args['model']['feature_extractor']['bert_pretrained'])
 
         # 语言、视觉、音频特征的投影
@@ -59,28 +55,6 @@ class MyMultimodal(nn.Module):
         self.W_Q_visual = nn.Linear(d_model, d_k * nhead)  # 视觉对齐的查询
         self.W_K_visual = nn.Linear(d_model, d_k * nhead)  # 视觉对齐的键
         self.W_V = nn.Linear(d_model, d_k * nhead)  # 对齐后的融合值投影
-
-        # 跨模态融合 Transformer
-        self.cross_modal_fusion = nn.Transformer(d_model=d_model, nhead=nhead, num_encoder_layers=2, batch_first=True)
-
-        # 自适应对齐的损失控制权重
-        self.lambda_1 = args.get('lambda_1', 1.0)
-        self.lambda_2 = args.get('lambda_2', 1.0)
-
-        # 跨模态融合 Transformer 和 GRL 层
-        self.cross_modal_fusion = nn.Transformer(d_model=d_model, nhead=args['model']['feature_extractor']['heads'],
-                                                 num_encoder_layers=2, batch_first=True)
-        self.GRL = GradientReversalLayer(alpha=1.0)
-        self.output_layer = nn.Linear(128, 1)
-
-        self.proxy_dominate_modality_generator = Transformer(
-            num_frames=args['model']['dmc']['proxy_dominant_feature_generator']['input_length'], 
-            save_hidden=False, 
-            token_len=args['model']['dmc']['proxy_dominant_feature_generator']['token_length'], 
-            dim=args['model']['dmc']['proxy_dominant_feature_generator']['input_dim'], 
-            depth=args['model']['dmc']['proxy_dominant_feature_generator']['depth'], 
-            heads=args['model']['dmc']['proxy_dominant_feature_generator']['heads'], 
-            mlp_dim=args['model']['dmc']['proxy_dominant_feature_generator']['hidden_dim'])
         
         self.GRL = GradientReversalLayer(alpha=1.0)
 
@@ -108,34 +82,6 @@ class MyMultimodal(nn.Module):
                 nn.Sigmoid()),
         ])
 
-        self.reconstructor = nn.ModuleList([
-            Transformer(num_frames=args['model']['reconstructor']['input_length'],
-                        save_hidden=False,
-                        token_len=None,
-                        dim=args['model']['reconstructor']['input_dim'],
-                        depth=args['model']['reconstructor']['depth'],
-                        heads=args['model']['reconstructor']['heads'],
-                        mlp_dim=args['model']['reconstructor']['hidden_dim']) for _ in range(3)
-        ])
-
-        self.dmml = nn.ModuleList([
-            Transformer(num_frames=args['model']['dmml']['language_encoder']['input_length'], 
-                        save_hidden=True, 
-                        token_len=None, 
-                        dim=args['model']['dmml']['language_encoder']['input_dim'], 
-                        depth=args['model']['dmml']['language_encoder']['depth'], 
-                        heads=args['model']['dmml']['language_encoder']['heads'], 
-                        mlp_dim=args['model']['dmml']['language_encoder']['hidden_dim']),
-
-            CrossTransformer(source_num_frames=args['model']['dmml']['fuison_transformer']['source_length'], 
-                             tgt_num_frames=args['model']['dmml']['fuison_transformer']['tgt_length'], 
-                             dim=args['model']['dmml']['fuison_transformer']['input_dim'], 
-                             depth=args['model']['dmml']['fuison_transformer']['depth'], 
-                             heads=args['model']['dmml']['fuison_transformer']['heads'], 
-                             mlp_dim=args['model']['dmml']['fuison_transformer']['hidden_dim']),
-
-            nn.Linear(args['model']['dmml']['regression']['input_dim'], args['model']['dmml']['regression']['out_dim'])
-        ])
         # 使用 CrossTransformer 进行多模态融合
         self.cross_transformer = CrossTransformer(
             source_num_frames=args['model']['dmml']['fuison_transformer']['source_length'],
@@ -220,9 +166,6 @@ class MyMultimodal(nn.Module):
             'consistency_loss': consistency_loss_audio + consistency_loss_visual  # 返回一致性损失
         }
 
-    def calculate_completeness(self, H_l):
-        feat_tmp = self.completeness_check[0](H_l)[:, :1].squeeze()
-        return self.completeness_check[1](feat_tmp)
 
 
 def build_model(args):
