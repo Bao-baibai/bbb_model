@@ -3,6 +3,7 @@ from torch import nn
 from .basic_layers import Transformer, CrossTransformer, GradientReversalLayer
 from .bert import BertTextEncoder
 import torch.nn.functional as F
+from einops import rearrange, repeat
 
 
 class MyMultimodal(nn.Module):
@@ -93,6 +94,17 @@ class MyMultimodal(nn.Module):
         )
         self.output_layer = nn.Linear(128, 1)
 
+        self.proxy_dominate_modality_generator = Transformer(
+            num_frames=args['model']['dmc']['proxy_dominant_feature_generator']['input_length'],
+            save_hidden=False,
+            token_len=args['model']['dmc']['proxy_dominant_feature_generator']['token_length'],
+            dim=args['model']['dmc']['proxy_dominant_feature_generator']['input_dim'],
+            depth=args['model']['dmc']['proxy_dominant_feature_generator']['depth'],
+            heads=args['model']['dmc']['proxy_dominant_feature_generator']['heads'],
+            mlp_dim=args['model']['dmc']['proxy_dominant_feature_generator']['hidden_dim'])
+        self.h_p = nn.Parameter(torch.ones(1, args['model']['feature_extractor']['token_length'][0], 128))
+
+
     def adaptive_alignment(self, H_l_2, H_l_3, H_a_1, H_v_1):
         # 假设我们希望实现 8 个头的多头注意力
         num_heads = 8
@@ -131,8 +143,16 @@ class MyMultimodal(nn.Module):
         h_1_a = self.proj_a(audio_m)[:, :8]
         h_1_l = self.proj_l(self.bertmodel(language_m))[:, :8]
 
+        feat_tmp = self.completeness_check[0](h_1_l)[:, :1].squeeze()
+        w = self.completeness_check[1](feat_tmp)  # completeness scores
+
+        h_0_p = repeat(self.h_p, '1 n d -> b n d', b=b)
+        h_1_p = self.proxy_dominate_modality_generator(torch.cat([h_0_p, h_1_a, h_1_v], dim=1))[:, :8]
+        h_1_p = self.GRL(h_1_p)
+        h_1_d = h_1_p * (1 - w.unsqueeze(-1)) + h_1_l * w.unsqueeze(-1)
+
         # 自适应对齐模块
-        H_aligned, alpha, beta = self.adaptive_alignment(h_1_l, h_1_l, h_1_a, h_1_v)
+        H_aligned, alpha, beta = self.adaptive_alignment(h_1_d, h_1_d, h_1_a, h_1_v)
 
         # 跨模态融合（使用 CrossTransformer）
         # 将 h_1_l 和 H_aligned 在最后一个维度上拼接为单一张量
@@ -142,8 +162,6 @@ class MyMultimodal(nn.Module):
         H_fusion = self.cross_transformer(fusion_input, fusion_input)  # 使用 CrossTransformer 进行融合
         sentiment_preds = self.output_layer(H_fusion.mean(dim=1))
 
-        feat_tmp = self.completeness_check[0](h_1_l)[:, :1].squeeze()
-        w = self.completeness_check[1](feat_tmp) # completeness scores
 
         # 跨模态一致性计算（使用 KL 散度或余弦相似度）
         consistency_loss_audio = F.kl_div(F.log_softmax(h_1_l, dim=-1), F.softmax(h_1_a, dim=-1), reduction='batchmean')

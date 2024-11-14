@@ -48,7 +48,7 @@ class MultimodalLoss(nn.Module):
         l_consistency = out.get('consistency_loss', torch.tensor(0.0))
 
         # 总损失
-        loss = (self.alpha * l_cc + self.beta * l_adv + self.gamma * l_rec +
+        loss = (self.alpha * l_cc + self.beta * l_adv +
                 self.sigma * l_sp + self.delta * l_consistency)
 
         return {
