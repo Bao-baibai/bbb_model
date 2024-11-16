@@ -10,7 +10,7 @@ base:
   gamma: 0.1
   sigma: 1.0
   train_mode: regression # only support regression now
-  missing_rate_eval_test: 0.5   # used for evaluation and testing
+  missing_rate_eval_test: 0   # used for evaluation and testing
   do_validation: true
 
 

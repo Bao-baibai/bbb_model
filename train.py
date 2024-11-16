@@ -17,7 +17,7 @@ print(device)
 
 parser = argparse.ArgumentParser() 
 parser.add_argument('--config_file', type=str, default='configs/train_mosi.yaml')
-parser.add_argument('--seed', type=int, default=1113)
+parser.add_argument('--seed', type=int, default=1112)
 opt = parser.parse_args()
 print(opt)
 

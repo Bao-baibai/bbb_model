@@ -164,8 +164,10 @@ class MyMultimodal(nn.Module):
 
 
         # 跨模态一致性计算（使用 KL 散度或余弦相似度）
-        consistency_loss_audio = F.kl_div(F.log_softmax(h_1_l, dim=-1), F.softmax(h_1_a, dim=-1), reduction='batchmean')
-        consistency_loss_visual = F.kl_div(F.log_softmax(h_1_l, dim=-1), F.softmax(h_1_v, dim=-1),
+        # consistency_loss_audio = F.kl_div(F.log_softmax(h_1_l, dim=-1), F.softmax(h_1_a, dim=-1), reduction='batchmean')
+        # consistency_loss_visual = F.kl_div(F.log_softmax(h_1_l, dim=-1), F.softmax(h_1_v, dim=-1),
+        #                                    reduction='batchmean')
+        consistency_loss = F.kl_div(F.log_softmax(h_1_l, dim=-1), F.softmax(H_aligned, dim=-1),
                                            reduction='batchmean')
 
         # 判别器输出，确保生成 effectiveness_discriminator_out
@@ -181,7 +183,7 @@ class MyMultimodal(nn.Module):
             'sentiment_preds': sentiment_preds,
             'w': w,
             'effectiveness_discriminator_out': effectiveness_discriminator_out,
-            'consistency_loss': consistency_loss_audio + consistency_loss_visual  # 返回一致性损失
+            'consistency_loss': consistency_loss  # 返回一致性损失
         }
 
 
